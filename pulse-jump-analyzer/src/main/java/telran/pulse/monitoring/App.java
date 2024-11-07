@@ -22,4 +22,3 @@ public class App {
 		});
 	}
 }
-// s3_bucket = "telran-feldman-bucket"

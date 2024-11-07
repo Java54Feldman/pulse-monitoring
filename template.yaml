@@ -23,6 +23,26 @@ Resources:
       StreamSpecification:
           StreamViewType: NEW_AND_OLD_IMAGES
 
+  PulseAbnormalValuesStream:
+    Type: 'AWS::DynamoDB::Table'
+    Properties:
+      TableName: pulse_abnormal_values
+      AttributeDefinitions:
+        - AttributeName: patientId
+          AttributeType: N
+        - AttributeName: timestamp
+          AttributeType: N
+      KeySchema:
+        - AttributeName: patientId
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      StreamSpecification:
+          StreamViewType: NEW_AND_OLD_IMAGES
+
   # Define the publisher Lambda function with permissions
   PulseJumpAnalyzer:
     Type: 'AWS::Serverless::Function'
@@ -46,4 +66,27 @@ Resources:
             Resource: '*'
             Action:
               - dynamodb:*
-  
+              
+  # Define the publisher Lambda function with permissions
+  PulseValuesAnalyzer:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      CodeUri: pulse-values-analyzer
+      Handler: telran.pulse.monitoring.App::handleRequest
+      Runtime: java17
+      Architectures:
+        - x86_64
+      Timeout: 30
+      MemorySize: 512
+      Events:
+        TableRecordChange:
+          Type: DynamoDB
+          Properties:
+            StartingPosition: LATEST
+            Stream: !GetAtt PulseValuesStream.StreamArn
+      Policies:
+        - Statement:
+          - Effect: Allow
+            Resource: '*'
+            Action:
+              - dynamodb:*         
