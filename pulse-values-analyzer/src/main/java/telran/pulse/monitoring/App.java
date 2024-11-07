@@ -46,7 +46,15 @@ public class App {
 	}
 
 	private static Level getLoggerLevel() {
-		return Level.FINER;
+		String levelStr = System.getenv()
+		.getOrDefault(LOGGER_LEVEL_ENV_VALUE, DEFAULT_LOGGER_LEVEL);
+		Level res = null;
+		try {
+			res = Level.parse(levelStr);
+		} catch (Exception e) {
+			res = Level.parse(DEFAULT_LOGGER_LEVEL);
+		}
+		return res;
 	}
 
 	private void processPulseValue(Map<String, AttributeValue> map) {

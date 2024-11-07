@@ -1,6 +1,18 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Transform: AWS::Serverless-2016-10-31
 Description: Streams DynamoDB table changes
+Globals:
+  Function:
+    Handler: telran.pulse.monitoring.App::handleRequest
+    Runtime: java17
+    Architectures:
+      - x86_64
+    Timeout: 30
+    MemorySize: 512
+    Environment:
+      Variables:
+        LOGGER_LEVEL: INFO
+
 Resources:
   #DynamoDB Streams specification
   PulseValuesStream:
@@ -48,45 +60,40 @@ Resources:
     Type: 'AWS::Serverless::Function'
     Properties:
       CodeUri: pulse-jump-analyzer
-      Handler: telran.pulse.monitoring.App::handleRequest
-      Runtime: java17
-      Architectures:
-        - x86_64
-      Timeout: 30
-      MemorySize: 512
-      Events:
-        TableRecordChange:
-          Type: DynamoDB
-          Properties:
-            StartingPosition: LATEST
-            Stream: !GetAtt PulseValuesStream.StreamArn
       Policies:
         - Statement:
           - Effect: Allow
             Resource: '*'
             Action:
               - dynamodb:*
-              
-  # Define the publisher Lambda function with permissions
-  PulseValuesAnalyzer:
-    Type: 'AWS::Serverless::Function'
-    Properties:
-      CodeUri: pulse-values-analyzer
-      Handler: telran.pulse.monitoring.App::handleRequest
-      Runtime: java17
-      Architectures:
-        - x86_64
-      Timeout: 30
-      MemorySize: 512
       Events:
         TableRecordChange:
           Type: DynamoDB
           Properties:
             StartingPosition: LATEST
             Stream: !GetAtt PulseValuesStream.StreamArn
+            FilterCriteria:
+              Filters:
+                - Pattern: '{"eventName": ["INSERT"]}'
+           
+  # Define the publisher Lambda function with permissions
+  PulseValuesAnalyzer:
+    Type: 'AWS::Serverless::Function'
+    Properties:
+      CodeUri: pulse-values-analyzer
       Policies:
         - Statement:
           - Effect: Allow
             Resource: '*'
             Action:
-              - dynamodb:*         
+              - dynamodb:*  
+      Events:
+        TableRecordChange:
+          Type: DynamoDB
+          Properties:
+            StartingPosition: LATEST
+            Stream: !GetAtt PulseValuesStream.StreamArn
+            FilterCriteria:
+              Filters:
+                - Pattern: '{"eventName": ["INSERT"]}'
+             

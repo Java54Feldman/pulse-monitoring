@@ -7,4 +7,6 @@ public interface Constants {
     int MIN_THRESHOLD_PULSE_VALUE = 50;
     int MAX_THRESHOLD_PULSE_VALUE = 190;
     String ABNORMAL_VALUES_TABLE_NAME = "pulse_abnormal_values";
+    String LOGGER_LEVEL_ENV_VALUE = "LOGGER_LEVEL";
+    String DEFAULT_LOGGER_LEVEL = "INFO";
 }
