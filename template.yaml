@@ -11,7 +11,7 @@ Globals:
     MemorySize: 512
     Environment:
       Variables:
-        LOGGER_LEVEL: INFO
+        LOGGER_LEVEL: FINEST
 
 Resources:
   #DynamoDB Streams specification
@@ -33,7 +33,7 @@ Resources:
         ReadCapacityUnits: 5
         WriteCapacityUnits: 5
       StreamSpecification:
-          StreamViewType: NEW_AND_OLD_IMAGES
+          StreamViewType: NEW_IMAGE
 
   PulseAbnormalValuesStream:
     Type: 'AWS::DynamoDB::Table'
@@ -53,7 +53,41 @@ Resources:
         ReadCapacityUnits: 5
         WriteCapacityUnits: 5
       StreamSpecification:
-          StreamViewType: NEW_AND_OLD_IMAGES
+          StreamViewType: NEW_IMAGE
+
+  PulseJumpValuesStream:
+    Type: 'AWS::DynamoDB::Table'
+    Properties:
+      TableName: pulse_jumps_values
+      AttributeDefinitions:
+        - AttributeName: patientId
+          AttributeType: N
+        - AttributeName: timestamp
+          AttributeType: N
+      KeySchema:
+        - AttributeName: patientId
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      StreamSpecification:
+          StreamViewType: NEW_IMAGE
+
+  PulseLastValues:
+    Type: 'AWS::DynamoDB::Table'
+    Properties:
+      TableName: last_pulse_values
+      AttributeDefinitions:
+        - AttributeName: patientId
+          AttributeType: N
+      KeySchema:
+        - AttributeName: patientId
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5         
 
   # Define the publisher Lambda function with permissions
   PulseJumpAnalyzer:
@@ -66,6 +100,9 @@ Resources:
             Resource: '*'
             Action:
               - dynamodb:*
+      Environment:
+        Variables:
+          FACTOR: 0.2f
       Events:
         TableRecordChange:
           Type: DynamoDB
@@ -87,6 +124,7 @@ Resources:
             Resource: '*'
             Action:
               - dynamodb:*  
+      
       Events:
         TableRecordChange:
           Type: DynamoDB
