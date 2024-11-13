@@ -1,5 +1,11 @@
 package telran.pulse.monitoring;
 
+import org.json.JSONObject;
+import java.io.IOException;
+import java.net.*;
+import java.net.http.*;
+import java.net.http.HttpResponse.BodyHandlers;
+
 import java.util.*;
 import java.util.logging.*;
 
@@ -11,18 +17,24 @@ import software.amazon.awssdk.services.dynamodb.model.PutItemRequest;
 import software.amazon.awssdk.services.dynamodb.model.PutItemRequest.Builder;
 import static telran.pulse.monitoring.Constants.*;
 
-public class App {
+record Range(int min, int max) {
 
+}
+
+public class App {
+	static HttpClient httpClient = HttpClient.newHttpClient();
+	static String baseURL;
 	static DynamoDbClient client = DynamoDbClient.builder().build();
-	static Builder request;
+	static Builder dynamoItemRequest;
 	static Logger logger = Logger.getLogger("pulse-value-analyzer");
 	static {
 		loggerSetUp();
-		
+		baseURLSetUp();
 	}
+	static HashMap<String, Range> ranges = new HashMap<>();
 
 	public void handleRequest(DynamodbEvent event, Context context) {
-		request = PutItemRequest.builder().tableName(ABNORMAL_VALUES_TABLE_NAME);
+		dynamoItemRequest = PutItemRequest.builder().tableName(ABNORMAL_VALUES_TABLE_NAME);
 		event.getRecords().forEach(r -> {
 			Map<String, AttributeValue> map = r.getDynamodb().getNewImage();
 			if (map == null) {
@@ -36,6 +48,15 @@ public class App {
 		});
 	}
 
+	private static void baseURLSetUp() {
+		baseURL = System.getenv(BASE_URL_ENV_NAME);
+		if (baseURL == null) {
+			logger.severe("Range provider URL doesn't exist");
+			throw new RuntimeException(BASE_URL_ENV_NAME + " Environment variable not set");
+		}
+		logger.config(BASE_URL_ENV_NAME + " is " + baseURL);
+	}
+
 	private static void loggerSetUp() {
 		Level loggerLevel = getLoggerLevel();
 		LogManager.getLogManager().reset();
@@ -47,7 +68,7 @@ public class App {
 
 	private static Level getLoggerLevel() {
 		String levelStr = System.getenv()
-		.getOrDefault(LOGGER_LEVEL_ENV_VALUE, DEFAULT_LOGGER_LEVEL);
+				.getOrDefault(LOGGER_LEVEL_ENV_VALUE, DEFAULT_LOGGER_LEVEL);
 		Level res = null;
 		try {
 			res = Level.parse(levelStr);
@@ -59,15 +80,61 @@ public class App {
 
 	private void processPulseValue(Map<String, AttributeValue> map) {
 		int value = Integer.parseInt(map.get(VALUE_ATTRIBUTE).getN());
+		String patientIdStr = map.get(PATIENT_ID_ATTRIBUTE).getN();
 		logger.finer(getLogMessage(map));
-		if (value > MAX_THRESHOLD_PULSE_VALUE || value < MIN_THRESHOLD_PULSE_VALUE) {
+		Range range = getRange(patientIdStr);
+		if (value > range.max() || value < range.min()) {
 			processAbnormalPulseValue(map);
+		}
+	}
+
+	private Range getRange(String patientIdStr) {
+		Range res = ranges.get(patientIdStr);
+		if (res != null) {
+			logger.finer("Range taken from cache " + res);
+		} else {
+			res = getRangeFromProvider(patientIdStr);
+			logger.fine("Range taken from provider API " + res);
+		}
+		return res;
+
+	}
+
+	private Range getRangeFromProvider(String patientIdStr) {
+		HttpRequest request = HttpRequest.newBuilder(getURL(patientIdStr)).build();
+		HttpResponse<String> response;
+		try {
+			response = httpClient.send(request, BodyHandlers.ofString());
+		} catch (IOException | InterruptedException e) {
+			throw new RuntimeException(e);
+		}
+		String bodyJSON = response.body();
+		if (response.statusCode() >= 400) {
+			throw new RuntimeException(bodyJSON);
+		}
+		return getRangeFromJSON(bodyJSON);
+	}
+
+	private Range getRangeFromJSON(String bodyJSON) {
+		JSONObject jsonObj = new JSONObject(bodyJSON);
+		return new Range(jsonObj.getInt(MIN_FIELD_NAME), jsonObj.getInt(MAX_FIELD_NAME));
+	}
+
+	private URI getURL(String patientIdStr) {
+		String uriStr = baseURL + "?patientId=" + patientIdStr;
+		logger.fine(uriStr + " is range provider URI");
+		try {
+			return new URI(uriStr);
+		} catch (URISyntaxException e) {
+			String errorMessage = uriStr + " wrong URI format";
+			logger.severe(errorMessage);
+			throw new RuntimeException(errorMessage);
 		}
 	}
 
 	private void processAbnormalPulseValue(Map<String, AttributeValue> map) {
 		logger.info(getLogMessage(map));
-		client.putItem(request.item(getPutItemMap(map)).build());
+		client.putItem(dynamoItemRequest.item(getPutItemMap(map)).build());
 	}
 
 	private Map<String, software.amazon.awssdk.services.dynamodb.model.AttributeValue> getPutItemMap(

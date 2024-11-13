@@ -124,7 +124,9 @@ Resources:
             Resource: '*'
             Action:
               - dynamodb:*  
-      
+      Environment:
+        Variables:
+          BASE_URL:  !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/range" 
       Events:
         TableRecordChange:
           Type: DynamoDB
@@ -134,4 +136,17 @@ Resources:
             FilterCriteria:
               Filters:
                 - Pattern: '{"eventName": ["INSERT"]}'
-             
+  RangeProviderFunction:
+    Type: AWS::Serverless::Function 
+    Properties:
+      CodeUri: range-provider
+      Events:
+        GetRange:
+          Type: Api 
+          Properties:
+            Path: /range
+            Method: get
+Outputs:
+  RangeProvider:
+    Description: "API Gateway endpoint URL for Prod stage for Range Provider function"
+    Value: !Sub "https://${ServerlessRestApi}.execute-api.${AWS::Region}.amazonaws.com/Prod/range"
