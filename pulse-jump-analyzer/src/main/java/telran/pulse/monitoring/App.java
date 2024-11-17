@@ -16,12 +16,14 @@ public class App {
 	static DynamoDbClient clientDynamo = DynamoDbClient.builder().build();
 	static Builder requestInsertLastValues;
 	static Builder requestInsertJumpValues;
-	static Logger logger = Logger.getLogger("pulse-jump-analyzer");
-	static float factor;
-
-	public void handleRequest(DynamodbEvent event, Context context) {
-		loggerSetUp();
+	static Logger logger = Logger.getLogger(LOGGER_PULSE_JUMP_ANALYZER_NAME);
+	static {
+		logger = Functions.loggerSetUp(logger);
 		factorSetUp();
+	}
+	static float factor;
+	
+	public void handleRequest(DynamodbEvent event, Context context) {
 		requestsSetUp();
 		var records = event.getRecords();
 		if (records == null) {
@@ -32,11 +34,14 @@ public class App {
 						.getDynamodb().getNewImage();
 				if (map == null) {
 					logger.warning("No new image found");
-				} else if (r.getEventName().equals("INSERT")) {
+				} else if (r.getEventName().equals(INSERT_EVENT_NAME)) {
 					String patientId = map.get(PATIENT_ID_ATTRIBUTE).getN();
 					Integer currentValue = Integer.parseInt(map.get(VALUE_ATTRIBUTE).getN());
 					String timestamp = map.get(TIMESTAMP_ATTRIBUTE).getN();
-					logger.finer(String.format("Received: record with patientId=%s, value=%d, timestamp=%s",
+					logger.finer(String.format("Received: record with "
+							+ PATIENT_ID_ATTRIBUTE + "=%s,	"
+							+ VALUE_ATTRIBUTE + "=%d, "
+							+ TIMESTAMP_ATTRIBUTE + "=%s",
 							patientId, currentValue, timestamp));
 					Integer lastValue = getLastValue(patientId, currentValue);
 					if (!lastValue.equals(currentValue)) {
@@ -48,7 +53,7 @@ public class App {
 					}
 					putLastValue(patientId, currentValue);
 				} else {
-					logger.warning(r.getEventName() + " event name but should be INSERT");
+					logger.warning(r.getEventName() + " event name but should be " + INSERT_EVENT_NAME);
 				}
 
 			});
@@ -75,11 +80,10 @@ public class App {
 		Map<String, AttributeValue> returnedItem = clientDynamo.getItem(request).item();
 		if (returnedItem == null || returnedItem.get(VALUE_ATTRIBUTE) == null) {
 			logger.warning(String.format("no pulse value found in table %s for patient %s, taken current value %d",
-			 LAST_PULSE_VALUES_TABLE_NAME, patientId, currentValue));
+					LAST_PULSE_VALUES_TABLE_NAME, patientId, currentValue));
 		} else {
 			String resStr = returnedItem.get(VALUE_ATTRIBUTE).n();
 			res = Integer.parseInt(resStr);
-
 		}
 		return res;
 	}
@@ -103,30 +107,6 @@ public class App {
 						FACTOR_ENV_VARIABLE, factorStr, factor));
 			}
 		}
-
-	}
-
-	private static void loggerSetUp() {
-		Level loggerLevel = getLoggerLevel();
-		LogManager.getLogManager().reset();
-		Handler handler = new ConsoleHandler();
-		logger.setLevel(loggerLevel);
-		handler.setLevel(Level.FINEST);
-		logger.addHandler(handler);
-		logger.config("logger level is " + loggerLevel);
-	}
-
-	private static Level getLoggerLevel() {
-		String levelStr = System.getenv()
-				.getOrDefault(LOGGER_LEVEL_ENV_VARIABLE, DEFAULT_LOGGER_LEVEL);
-		Level res = null;
-		try {
-			res = Level.parse(levelStr);
-		} catch (Exception e) {
-			logger.warning(levelStr + " wrong logger level take default value " + DEFAULT_LOGGER_LEVEL);
-			res = Level.parse(DEFAULT_LOGGER_LEVEL);
-		}
-		return res;
 	}
 
 	private void jumpProcessing(String patientId, Integer currentValue, Integer lastValue,
@@ -140,11 +120,9 @@ public class App {
 		mapItem.put(CURRENT_VALUE_ATTRIBUTE, AttributeValue.builder().n(currentValue + "").build());
 		mapItem.put(TIMESTAMP_ATTRIBUTE, AttributeValue.builder().n(timestamp).build());
 		clientDynamo.putItem(requestInsertJumpValues.item(mapItem).build());
-
 	}
 
 	private boolean isJump(Integer currentValue, Integer lastValue) {
-
 		return (float) Math.abs(currentValue - lastValue) / lastValue > factor;
 	}
 }

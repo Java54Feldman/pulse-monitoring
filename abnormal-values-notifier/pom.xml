@@ -29,6 +29,11 @@
             <artifactId>sns</artifactId>
             <version>2.29.10</version>
         </dependency>
+        <dependency>
+          <groupId>telran.pulse.monitoring</groupId>
+          <artifactId>common-code</artifactId>
+          <version>1.0-SNAPSHOT</version>
+        </dependency>
       </dependencies>
     
       <build>

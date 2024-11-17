@@ -18,7 +18,6 @@ import software.amazon.awssdk.services.dynamodb.model.PutItemRequest.Builder;
 import static telran.pulse.monitoring.Constants.*;
 
 record Range(int min, int max) {
-
 }
 
 public class App {
@@ -26,23 +25,23 @@ public class App {
 	static String baseURL;
 	static DynamoDbClient client = DynamoDbClient.builder().build();
 	static Builder dynamoItemRequest;
-	static Logger logger = Logger.getLogger("pulse-value-analyzer");
+	static Logger logger = Logger.getLogger(LOGGER_PULSE_VALUE_ANALYZER_NAME);
 	static {
-		loggerSetUp();
+		logger = Functions.loggerSetUp(logger);
 		baseURLSetUp();
 	}
 	static HashMap<String, Range> ranges = new HashMap<>();
-
+	
 	public void handleRequest(DynamodbEvent event, Context context) {
 		dynamoItemRequest = PutItemRequest.builder().tableName(ABNORMAL_VALUES_TABLE_NAME);
 		event.getRecords().forEach(r -> {
 			Map<String, AttributeValue> map = r.getDynamodb().getNewImage();
 			if (map == null) {
 				logger.warning("No new image found");
-			} else if (r.getEventName().equals("INSERT")) {
+			} else if (r.getEventName().equals(INSERT_EVENT_NAME)) {
 				processPulseValue(map);
 			} else {
-				logger.warning(String.format("The event isn't INSERT but %s", r.getEventName()));
+				logger.warning(String.format("The event isn't " + INSERT_EVENT_NAME + " but %s", r.getEventName()));
 			}
 
 		});
@@ -55,27 +54,6 @@ public class App {
 			throw new RuntimeException(BASE_URL_ENV_NAME + " Environment variable not set");
 		}
 		logger.config(BASE_URL_ENV_NAME + " is " + baseURL);
-	}
-
-	private static void loggerSetUp() {
-		Level loggerLevel = getLoggerLevel();
-		LogManager.getLogManager().reset();
-		Handler handler = new ConsoleHandler();
-		logger.setLevel(loggerLevel);
-		handler.setLevel(Level.FINEST);
-		logger.addHandler(handler);
-	}
-
-	private static Level getLoggerLevel() {
-		String levelStr = System.getenv()
-				.getOrDefault(LOGGER_LEVEL_ENV_VALUE, DEFAULT_LOGGER_LEVEL);
-		Level res = null;
-		try {
-			res = Level.parse(levelStr);
-		} catch (Exception e) {
-			res = Level.parse(DEFAULT_LOGGER_LEVEL);
-		}
-		return res;
 	}
 
 	private void processPulseValue(Map<String, AttributeValue> map) {
@@ -97,7 +75,6 @@ public class App {
 			logger.fine("Range taken from provider API " + res);
 		}
 		return res;
-
 	}
 
 	private Range getRangeFromProvider(String patientIdStr) {

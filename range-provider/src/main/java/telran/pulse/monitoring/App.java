@@ -1,4 +1,6 @@
 package telran.pulse.monitoring;
+
+import static telran.pulse.monitoring.Constants.*;
 import java.util.*;
 import org.json.JSONObject;
 import com.amazonaws.services.lambda.runtime.*;
@@ -7,6 +9,7 @@ import com.amazonaws.services.lambda.runtime.events.*;
  * Handler for requests to Lambda function.
  */
 record Range(int min, int max) {
+
 }
 public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatewayProxyResponseEvent> {
     static HashMap<String, Range> ranges = new HashMap<>() {
@@ -18,17 +21,19 @@ public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatew
             put("5", new Range(50, 250));
         }
     };
+    
     public APIGatewayProxyResponseEvent handleRequest(final APIGatewayProxyRequestEvent input, final Context context) {
         Map<String, String> headers = new HashMap<>();
         headers.put("Content-Type", "application/json");
         Map<String, String> mapParameters = input.getQueryStringParameters();
         APIGatewayProxyResponseEvent response = new APIGatewayProxyResponseEvent()
                 .withHeaders(headers);
+        
         try {
-            if (!mapParameters.containsKey("patientId")) {
-                throw new IllegalArgumentException("no patientId parameter");
+            if (!mapParameters.containsKey(PATIENT_ID_ATTRIBUTE)) {
+                throw new IllegalArgumentException("no " + PATIENT_ID_ATTRIBUTE + " parameter");
             }
-            String patientIdStr = mapParameters.get("patientId");
+            String patientIdStr = mapParameters.get(PATIENT_ID_ATTRIBUTE);
             Range range = ranges.get(patientIdStr);
             if (range == null) {
                 throw new IllegalStateException(patientIdStr + " not found in ranges");
@@ -51,13 +56,13 @@ public class App implements RequestHandler<APIGatewayProxyRequestEvent, APIGatew
     }
     private String getErrorJSON(String message) {
         JSONObject jsonObj = new JSONObject();
-        jsonObj.put("error", message);
+        jsonObj.put(ERROR_NAME, message);
         return jsonObj.toString();
     }
     private String getRangeJSON(Range range) {
         JSONObject jsonObj = new JSONObject();
-        jsonObj.put("min", range.min());
-        jsonObj.put("max", range.max());
+        jsonObj.put(MIN_FIELD_NAME, range.min());
+        jsonObj.put(MAX_FIELD_NAME, range.max());
         return jsonObj.toString();
     }
 }
